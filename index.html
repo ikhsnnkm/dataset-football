@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Football Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#0a0d12;--card:#111620;--card2:#161c28;
+  --border:#1e2738;--accent:#3b82f6;--glow:rgba(59,130,246,.15);
+  --t1:#e8edf5;--t2:#7d8fa8;--t3:#3d4f66;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.4rem;position:relative;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:#2a3650;box-shadow:0 0 20px var(--glow)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.35),transparent)}
+
+.mono{font-family:'DM Mono',monospace}
+.stat-num{font-family:'DM Mono',monospace;font-size:1.9rem;font-weight:500;letter-spacing:-1px}
+
+#drop-zone{border:2px dashed var(--border);border-radius:14px;transition:border-color .2s,background .2s;cursor:pointer;background:var(--card)}
+#drop-zone:hover,#drop-zone.over{border-color:var(--accent);background:var(--glow)}
+
+.tbl{border-collapse:collapse;width:100%;font-size:.8rem}
+.tbl th{background:#0d1219;color:var(--t2);font-weight:500;text-transform:uppercase;letter-spacing:.06em;font-size:.7rem;padding:.6rem .9rem;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2}
+.tbl td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--t2);font-family:'DM Mono',monospace;font-size:.77rem}
+.tbl tr:hover td{background:rgba(59,130,246,.04)}
+.tbl tr:last-child td{border-bottom:none}
+
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .6rem;border-radius:99px;font-size:.73rem;font-weight:500}
+.badge-blue{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.25)}
+.badge-green{background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.2)}
+
+.sec-title{font-size:.95rem;font-weight:600;letter-spacing:-.01em}
+.sec-sub{font-size:.78rem;color:var(--t2);margin-top:.12rem}
+
+.prog{height:5px;background:var(--border);border-radius:99px;overflow:hidden;margin:.4rem 0 .2rem}
+.prog-fill{height:100%;border-radius:99px;transition:width .7s cubic-bezier(.4,0,.2,1)}
+
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.fade{animation:fadeIn .45s ease both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+#toast{position:fixed;bottom:1.8rem;right:1.8rem;padding:.8rem 1.1rem;border-radius:10px;font-size:.83rem;font-weight:500;z-index:9999;transform:translateY(120%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:.5rem;max-width:320px}
+#toast.show{transform:translateY(0)}
+#toast.ok{background:#0d2b1a;border:1px solid #166534;color:#86efac}
+#toast.err{background:#2b0d0d;border:1px solid #991b1b;color:#fca5a5}
+
+select,input[type=text]{background:var(--card2);border:1px solid var(--border);color:var(--t1);border-radius:7px;padding:.45rem .8rem;font-family:'DM Sans',sans-serif;font-size:.83rem;outline:none;transition:border-color .2s}
+select:focus,input[type=text]:focus{border-color:var(--accent)}
+select option{background:#111620}
+
+.rank-row{display:flex;align-items:center;gap:.8rem;padding:.65rem 0;border-bottom:1px solid var(--border)}
+.rank-row:last-child{border-bottom:none}
+.rank-n{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--t3);width:1.1rem;text-align:right;flex-shrink:0}
+.rank-name{flex:1;font-size:.86rem;color:var(--t1)}
+.rank-val{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--accent)}
+
+.pill{display:inline-flex;align-items:center;padding:.27rem .65rem;border-radius:99px;font-size:.76rem;cursor:pointer;border:1px solid var(--border);color:var(--t2);transition:all .15s}
+
+.hdr-glow{position:absolute;top:-50px;left:50%;transform:translateX(-50%);width:500px;height:160px;background:radial-gradient(ellipse,rgba(59,130,246,.16) 0%,transparent 70%);pointer-events:none}
+
+/* Chart wrapper — FIXED height so canvas renders */
+.ch-wrap{position:relative;width:100%;height:260px}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- HEADER -->
+<header style="border-bottom:1px solid var(--border);padding:1.2rem 2rem;position:relative">
+  <div class="hdr-glow"></div>
+  <div style="max-width:1280px;margin:0 auto;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:.8rem">
+      <div style="width:36px;height:36px;border-radius:10px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:1.1rem">⚽</div>
+      <div>
+        <div style="font-size:.95rem;font-weight:700;letter-spacing:-.01em">Football Analytics</div>
+        <div style="font-size:.7rem;color:var(--t2)">Club Elo Rating · 2000–2025</div>
+      </div>
+    </div>
+    <div id="hdr-badge" style="display:none">
+      <span class="badge badge-green">
+        <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+        Dataset Loaded
+      </span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main style="max-width:1280px;margin:0 auto;padding:2rem 2rem 4rem">
+
+  <!-- UPLOAD -->
+  <div id="upload-section">
+    <div id="drop-zone" style="padding:4rem 2rem;display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center;border-radius:14px"
+         onclick="document.getElementById('csv-file').click()"
+         ondragover="ev.preventDefault();this.classList.add('over')"
+         ondragleave="this.classList.remove('over')"
+         ondrop="this.classList.remove('over');ev.preventDefault();handleFile(ev.dataTransfer.files[0])">
+      <div style="font-size:2.5rem">📂</div>
+      <div>
+        <div style="font-weight:600;font-size:1rem">Upload Dataset CSV</div>
+        <div style="font-size:.83rem;color:var(--t2);margin-top:.3rem">Drag & drop atau klik untuk memilih file</div>
+        <div style="font-size:.74rem;color:var(--t3);margin-top:.2rem">Format: date, club, country, elo</div>
+      </div>
+      <label style="padding:.55rem 1.2rem;border-radius:8px;background:#2563eb;font-size:.84rem;font-weight:500;color:#fff;cursor:pointer;transition:background .2s" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+        Pilih File CSV
+        <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="handleFile(this.files[0])"/>
+      </label>
+    </div>
+    <div id="loading" style="display:none;flex-direction:column;align-items:center;gap:.8rem;padding:3rem">
+      <div class="spinner"></div>
+      <div style="font-size:.85rem;color:var(--t2)">Memproses dataset…</div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" style="display:none">
+
+    <!-- FILTER BAR -->
+    <div class="card fade" style="margin-bottom:1.5rem">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="font-size:.72rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em" id="lbl-f1">Negara</span>
+          <select id="f-country" onchange="applyFilter()"></select>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="font-size:.72rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em">Tahun</span>
+          <select id="f-year" onchange="applyFilter()"></select>
+        </div>
+        <button onclick="resetFilter()" style="margin-left:auto;padding:.42rem .9rem;border-radius:7px;border:1px solid var(--border);font-size:.78rem;color:var(--t2);background:transparent;cursor:pointer;transition:border-color .2s,color .2s" onmouseover="this.style.borderColor='#3b82f6';this.style.color='#3b82f6'" onmouseout="this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--border');this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--t2')">Reset</button>
+        <span id="f-count" class="mono" style="font-size:.78rem;color:var(--t3)"></span>
+      </div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem" class="fade">
+      <div class="card"><div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Total Records</div><div class="stat-num" id="s-rec">—</div><div style="font-size:.72rem;color:var(--t3);margin-top:.2rem">data points</div></div>
+      <div class="card"><div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Total Klub</div><div class="stat-num" id="s-clubs">—</div><div style="font-size:.72rem;color:var(--t3);margin-top:.2rem">klub unik</div></div>
+      <div class="card"><div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Rata-rata Elo</div><div class="stat-num" id="s-elo">—</div><div style="font-size:.72rem;color:var(--t3);margin-top:.2rem">rating rata-rata</div></div>
+      <div class="card"><div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Negara</div><div class="stat-num" id="s-ctry">—</div><div style="font-size:.72rem;color:var(--t3);margin-top:.2rem">negara unik</div></div>
+    </div>
+
+    <!-- DATA PREVIEW -->
+    <div class="card fade" style="margin-bottom:1.5rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
+        <div><div class="sec-title">Data Preview</div><div class="sec-sub">20 baris pertama dari dataset</div></div>
+        <span class="badge badge-blue" id="prev-badge">—</span>
+      </div>
+      <div style="overflow:auto;max-height:280px;border-radius:10px;border:1px solid var(--border)">
+        <table class="tbl" id="prev-tbl"></table>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 1 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.2rem" class="fade">
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">Top 10 Klub — Elo Tertinggi</div><div class="sec-sub">Rata-rata Elo Rating sepanjang waktu</div></div>
+        <div class="ch-wrap"><canvas id="c-clubs"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">Distribusi Elo Rating</div><div class="sec-sub">Sebaran rating seluruh data</div></div>
+        <div class="ch-wrap"><canvas id="c-dist"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.2rem" class="fade">
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">Top 10 Negara — Elo Tertinggi</div><div class="sec-sub">Rata-rata Elo per negara</div></div>
+        <div class="ch-wrap"><canvas id="c-ctry"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">Tren Data per Tahun</div><div class="sec-sub">Jumlah record per tahun dalam dataset</div></div>
+        <div class="ch-wrap"><canvas id="c-year"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="card fade" style="margin-bottom:1.2rem">
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:.8rem;margin-bottom:.8rem">
+        <div><div class="sec-title">Elo Rating Timeline</div><div class="sec-sub">Perbandingan pergerakan Elo antar klub</div></div>
+        <div style="display:flex;gap:.5rem;align-items:center;position:relative">
+          <input type="text" id="club-inp" placeholder="Cari & tambah klub…" style="width:180px" oninput="suggestClubs(this.value)"/>
+          <div id="club-drop" style="display:none;position:absolute;top:2.2rem;left:0;background:var(--card2);border:1px solid var(--border);border-radius:10px;width:220px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
+          <button onclick="clearClubs()" style="padding:.42rem .8rem;border-radius:7px;border:1px solid var(--border);font-size:.76rem;color:var(--t2);background:transparent;cursor:pointer">Clear</button>
+        </div>
+      </div>
+      <div id="club-pills" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.8rem;min-height:1rem"></div>
+      <div class="ch-wrap" style="height:320px"><canvas id="c-time"></canvas></div>
+    </div>
+
+    <!-- RANK TABLES -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem" class="fade">
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">🏆 Klub Elo Tertinggi</div><div class="sec-sub">Berdasarkan Elo terbaru dalam dataset</div></div>
+        <div id="r-clubs"></div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:.8rem"><div class="sec-title">🌍 Negara dengan Klub Terbanyak</div><div class="sec-sub">Jumlah klub unik per negara</div></div>
+        <div id="r-ctry"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- FOOTBALL CLASSIFICATIONS                    -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="classify-section" style="margin-top:1.5rem" class="fade">
+
+      <!-- Section header -->
+      <div style="margin-bottom:1rem">
+        <div style="font-size:1.05rem;font-weight:700;letter-spacing:-.01em">⚡ Football Classifications</div>
+        <div style="font-size:.78rem;color:var(--t2);margin-top:.18rem">Prediksi berbasis Elo Rating — Match Outcome · Over/Under Goals · Both Teams To Score</div>
+      </div>
+
+      <!-- Club selector -->
+      <div class="card" style="margin-bottom:1rem">
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end">
+          <div style="flex:1;min-width:180px">
+            <label style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:.4rem">Klub Home</label>
+            <div style="position:relative">
+              <input type="text" id="cl-home-inp" placeholder="Cari klub home…" style="width:100%" oninput="clSuggest('home',this.value)"/>
+              <div id="cl-home-drop" style="display:none;position:absolute;top:2.2rem;left:0;background:#161c28;border:1px solid var(--border);border-radius:10px;width:100%;max-height:180px;overflow-y:auto;z-index:60;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:180px">
+            <label style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:.4rem">Klub Away</label>
+            <div style="position:relative">
+              <input type="text" id="cl-away-inp" placeholder="Cari klub away…" style="width:100%" oninput="clSuggest('away',this.value)"/>
+              <div id="cl-away-drop" style="display:none;position:absolute;top:2.2rem;left:0;background:#161c28;border:1px solid var(--border);border-radius:10px;width:100%;max-height:180px;overflow-y:auto;z-index:60;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
+            </div>
+          </div>
+          <div>
+            <button onclick="runClassify()" id="cl-btn" style="padding:.52rem 1.2rem;border-radius:8px;background:#2563eb;border:none;color:#fff;font-size:.84rem;font-weight:500;cursor:pointer;transition:background .2s;opacity:.4;pointer-events:none"
+              onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">Prediksi</button>
+          </div>
+          <div>
+            <button onclick="clReset()" style="padding:.52rem .95rem;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--t2);font-size:.84rem;cursor:pointer">Reset</button>
+          </div>
+        </div>
+        <!-- Selected display -->
+        <div id="cl-selected" style="margin-top:.8rem;display:none">
+          <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+            <span id="cl-home-pill" class="badge badge-blue" style="font-size:.8rem"></span>
+            <span style="color:var(--t3);font-size:.8rem">vs</span>
+            <span id="cl-away-pill" class="badge" style="background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.8rem"></span>
+            <span style="font-size:.74rem;color:var(--t3);margin-left:.4rem" id="cl-elo-diff"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results grid (hidden until predict) -->
+      <div id="cl-results" style="display:none">
+
+        <!-- 3 classification cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
+
+          <!-- 1. Match Outcome -->
+          <div class="card">
+            <div style="margin-bottom:.9rem">
+              <div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em">Match Outcome</div>
+              <div style="font-size:.78rem;color:var(--t3);margin-top:.1rem">Win / Draw / Loss</div>
+            </div>
+            <div style="text-align:center;margin-bottom:.9rem">
+              <div id="cl-outcome-label" style="font-size:1.4rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.2rem">—</div>
+              <div id="cl-outcome-conf" style="font-size:.75rem;color:var(--t2)"></div>
+            </div>
+            <!-- probability bars -->
+            <div style="display:flex;flex-direction:column;gap:.45rem" id="cl-outcome-bars"></div>
+          </div>
+
+          <!-- 2. Over/Under 2.5 -->
+          <div class="card">
+            <div style="margin-bottom:.9rem">
+              <div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em">Over / Under Goals</div>
+              <div style="font-size:.78rem;color:var(--t3);margin-top:.1rem">Threshold: 2.5 gol</div>
+            </div>
+            <div style="text-align:center;margin-bottom:.9rem">
+              <div id="cl-ou-label" style="font-size:1.4rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.2rem">—</div>
+              <div id="cl-ou-conf" style="font-size:.75rem;color:var(--t2)"></div>
+            </div>
+            <div id="cl-ou-bars"></div>
+            <div style="margin-top:.8rem;font-size:.72rem;color:var(--t3);text-align:center" id="cl-ou-xg"></div>
+          </div>
+
+          <!-- 3. BTTS -->
+          <div class="card">
+            <div style="margin-bottom:.9rem">
+              <div style="font-size:.7rem;color:var(--t2);text-transform:uppercase;letter-spacing:.06em">Both Teams To Score</div>
+              <div style="font-size:.78rem;color:var(--t3);margin-top:.1rem">Yes / No</div>
+            </div>
+            <div style="text-align:center;margin-bottom:.9rem">
+              <div id="cl-btts-label" style="font-size:1.4rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.2rem">—</div>
+              <div id="cl-btts-conf" style="font-size:.75rem;color:var(--t2)"></div>
+            </div>
+            <div id="cl-btts-bars"></div>
+            <div style="margin-top:.8rem;font-size:.72rem;color:var(--t3);text-align:center" id="cl-btts-note"></div>
+          </div>
+        </div>
+
+        <!-- Elo comparison bar -->
+        <div class="card">
+          <div style="margin-bottom:.75rem"><div class="sec-title" style="font-size:.85rem">📊 Perbandingan Elo Rating</div></div>
+          <div id="cl-elo-bar-wrap">
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--t2);margin-bottom:.3rem">
+              <span id="cl-bar-home-lbl">Home</span><span id="cl-bar-away-lbl">Away</span>
+            </div>
+            <div style="height:10px;background:var(--border);border-radius:99px;overflow:hidden;position:relative">
+              <div id="cl-bar-home-fill" style="height:100%;border-radius:99px;background:#3b82f6;transition:width .7s cubic-bezier(.4,0,.2,1)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--t3);margin-top:.25rem">
+              <span id="cl-bar-home-elo"></span><span id="cl-bar-away-elo"></span>
+            </div>
+          </div>
+          <div style="margin-top:.7rem;font-size:.73rem;color:var(--t3);line-height:1.5" id="cl-explanation"></div>
+        </div>
+
+      </div><!-- /cl-results -->
+    </div><!-- /classify-section -->
+
+  </div><!-- /dash -->
+</main>
+
+<footer style="border-top:1px solid var(--border);padding:1.4rem 2rem;margin-top:2rem">
+  <div style="max-width:1280px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.5rem">
+    <span style="font-size:.73rem;color:var(--t3)">Football Analytics Dashboard · Club Elo Rating 2000–2025</span>
+    <span style="font-size:.73rem;color:var(--t3)">Semua proses di frontend — data tidak dikirim ke server</span>
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+var RAW = [], FILT = [], CLUBS = [], SEL = [], CH = {};
+
+var PAL = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7',
+           '#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
+
+/* ═══════════════════════════════════════════════
+   DRAG & DROP FIX
+═══════════════════════════════════════════════ */
+// Override inline ondragover/ondrop that use undefined `ev`
+document.getElementById('drop-zone').addEventListener('dragover', function(e){
+  e.preventDefault(); this.classList.add('over');
+});
+document.getElementById('drop-zone').addEventListener('dragleave', function(){
+  this.classList.remove('over');
+});
+document.getElementById('drop-zone').addEventListener('drop', function(e){
+  e.preventDefault(); this.classList.remove('over');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+/* ═══════════════════════════════════════════════
+   FILE HANDLING
+═══════════════════════════════════════════════ */
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    toast('❌ Hanya file CSV yang didukung', 'err'); return;
+  }
+  setLoading(true);
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+    worker: false,
+    complete: function(res) {
+      setLoading(false);
+      if (!res.data || !res.data.length) { toast('❌ File CSV kosong','err'); return; }
+
+      var fields = (res.meta.fields || []).map(function(f){ return f.toLowerCase().trim(); });
+      var isElo  = fields.indexOf('club') >= 0 && fields.indexOf('elo') >= 0;
+      if (!isElo) { toast('⚠️ Kolom tidak dikenali. Butuh: date, club, country, elo','err'); return; }
+
+      buildRaw(res.data);
+      toast('✅ ' + res.data.length.toLocaleString() + ' rows dimuat', 'ok');
+    },
+    error: function(e){ setLoading(false); toast('❌ ' + e.message, 'err'); }
+  });
+}
+
+function setLoading(on) {
+  document.getElementById('upload-section').style.opacity = on ? '.4' : '1';
+  document.getElementById('loading').style.display = on ? 'flex' : 'none';
+}
+
+/* ═══════════════════════════════════════════════
+   BUILD DATASET
+═══════════════════════════════════════════════ */
+function buildRaw(rows) {
+  RAW = [];
+  var cSet = {}, ySet = {}, clubSet = {};
+
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var d = str(r.date    || r.Date    || '');
+    var c = str(r.club    || r.Club    || '');
+    var n = str(r.country || r.Country || '');
+    var e = parseFloat(r.elo || r.Elo || r.ELO || 0);
+    var y = parseInt(d.substring(0,4)) || 0;
+    if (!c || e <= 0) continue;
+    RAW.push({date:d, club:c, country:n, elo:e, year:y});
+    cSet[n] = 1; if (y) ySet[y] = 1; clubSet[c] = 1;
+  }
+
+  FILT  = RAW.slice();
+  CLUBS = Object.keys(clubSet).sort();
+
+  // Fill filter selects
+  var countries = Object.keys(cSet).sort();
+  var years     = Object.keys(ySet).map(Number).sort(function(a,b){return a-b;});
+  fillSel('f-country', countries, 'Semua Negara');
+  fillSel('f-year',    years.map(String), 'Semua Tahun');
+
+  // Show dashboard
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+  document.getElementById('hdr-badge').style.display = 'block';
+
+  // Render after a tick so DOM/canvas has dimensions
+  setTimeout(renderAll, 30);
+}
+
+/* ═══════════════════════════════════════════════
+   FILTERS
+═══════════════════════════════════════════════ */
+function applyFilter() {
+  var fc = document.getElementById('f-country').value;
+  var fy = document.getElementById('f-year').value;
+  FILT = [];
+  for (var i = 0; i < RAW.length; i++) {
+    var r = RAW[i];
+    if (fc && r.country !== fc) continue;
+    if (fy && String(r.year) !== fy) continue;
+    FILT.push(r);
+  }
+  document.getElementById('f-count').textContent = FILT.length.toLocaleString() + ' records';
+  setTimeout(renderAll, 10);
+}
+
+function resetFilter() {
+  document.getElementById('f-country').value = '';
+  document.getElementById('f-year').value    = '';
+  FILT = RAW.slice();
+  document.getElementById('f-count').textContent = '';
+  setTimeout(renderAll, 10);
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER ALL
+═══════════════════════════════════════════════ */
+function renderAll() {
+  renderStats();
+  renderPreview();
+  renderTopClubs();
+  renderDist();
+  renderByCountry();
+  renderPerYear();
+  renderRankClubs();
+  renderRankCountries();
+  if (SEL.length) renderTimeline(); else timelineEmpty();
+}
+
+/* ── Stats ─────────────────────────────────── */
+function renderStats() {
+  var d = FILT, cS = {}, nS = {}, sum = 0;
+  for (var i = 0; i < d.length; i++) {
+    cS[d[i].club] = 1; nS[d[i].country] = 1; sum += d[i].elo;
+  }
+  anim('s-rec',   d.length);
+  anim('s-clubs', Object.keys(cS).length);
+  set('s-elo',    d.length ? (sum/d.length).toFixed(0) : '—');
+  anim('s-ctry',  Object.keys(nS).length);
+}
+
+/* ── Preview ───────────────────────────────── */
+function renderPreview() {
+  var rows = FILT.slice(0, 20);
+  var cols = ['date','club','country','elo'];
+  var h = '<thead><tr>'+cols.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr></thead>';
+  var b = '<tbody>'+rows.map(function(r){
+    return '<tr>'+cols.map(function(c){return '<td>'+(r[c]!=null?r[c]:'—')+'</td>';}).join('')+'</tr>';
+  }).join('')+'</tbody>';
+  document.getElementById('prev-tbl').innerHTML = h + b;
+  document.getElementById('prev-badge').textContent = rows.length + ' rows';
+}
+
+/* ── Top 10 Clubs ──────────────────────────── */
+function renderTopClubs() {
+  var map = grp(FILT, 'club');
+  var arr = [];
+  for (var k in map) arr.push({k:k, v:avgF(map[k],'elo')});
+  arr.sort(function(a,b){return b.v-a.v;});
+  arr = arr.slice(0,10);
+  bar('c-clubs', arr.map(function(x){return lbl(x.k,15);}), arr.map(function(x){return +x.v.toFixed(1);}), 'Rata-rata Elo', PAL[0]);
+}
+
+/* ── Distribution ──────────────────────────── */
+function renderDist() {
+  var d = FILT;
+  if (!d.length) return;
+  var mn = d[0].elo, mx = d[0].elo;
+  for (var i = 1; i < d.length; i++) {
+    if (d[i].elo < mn) mn = d[i].elo;
+    if (d[i].elo > mx) mx = d[i].elo;
+  }
+  var bz = 100;
+  var mb = Math.floor(mn/bz)*bz, xb = Math.ceil(mx/bz)*bz;
+  var bk = {};
+  for (var b = mb; b < xb; b += bz) bk[b] = 0;
+  for (var j = 0; j < d.length; j++) {
+    var bb = Math.floor(d[j].elo/bz)*bz;
+    bk[bb] = (bk[bb]||0) + 1;
+  }
+  var labels = Object.keys(bk).map(function(k){return k+'–'+(+k+bz);});
+  var vals   = Object.values(bk);
+  kill('c-dist');
+  var ctx = document.getElementById('c-dist').getContext('2d');
+  CH['c-dist'] = new Chart(ctx, {
+    type:'bar',
+    data:{labels:labels,datasets:[{label:'Jumlah Data',data:vals,
+      backgroundColor:PAL[2]+'99',borderColor:PAL[2],borderWidth:1,borderRadius:4}]},
+    options:opts()
+  });
+}
+
+/* ── By Country ────────────────────────────── */
+function renderByCountry() {
+  var map = grp(FILT, 'country');
+  var arr = [];
+  for (var k in map) arr.push({k:k, v:avgF(map[k],'elo')});
+  arr.sort(function(a,b){return b.v-a.v;});
+  arr = arr.slice(0,10);
+  bar('c-ctry', arr.map(function(x){return x.k;}), arr.map(function(x){return +x.v.toFixed(1);}), 'Rata-rata Elo', PAL[4], true);
+}
+
+/* ── Per Year ──────────────────────────────── */
+function renderPerYear() {
+  var map = grp(FILT, 'year');
+  var years = Object.keys(map).filter(function(y){return y&&y!=='0';}).sort();
+  var counts = years.map(function(y){return map[y].length;});
+  kill('c-year');
+  var ctx = document.getElementById('c-year').getContext('2d');
+  CH['c-year'] = new Chart(ctx, {
+    type:'line',
+    data:{labels:years,datasets:[{label:'Records',data:counts,
+      borderColor:PAL[1],backgroundColor:PAL[1]+'22',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4}]},
+    options:opts()
+  });
+}
+
+/* ── Rank Clubs ────────────────────────────── */
+function renderRankClubs() {
+  var latest = {};
+  for (var i = 0; i < FILT.length; i++) {
+    var r = FILT[i];
+    if (!latest[r.club] || r.date > latest[r.club].date) latest[r.club] = r;
+  }
+  var arr = Object.values(latest).sort(function(a,b){return b.elo-a.elo;}).slice(0,10);
+  if (!arr.length) { document.getElementById('r-clubs').innerHTML = empty(); return; }
+  var mx = arr[0].elo, html = '';
+  for (var j = 0; j < arr.length; j++) {
+    var r2 = arr[j], pct = (r2.elo/mx*100).toFixed(1), col = PAL[j%PAL.length];
+    html += rankRow(j+1, esc(r2.club), r2.elo.toFixed(0), pct, col, esc(r2.country)+' · '+r2.date);
+  }
+  document.getElementById('r-clubs').innerHTML = html;
+}
+
+/* ── Rank Countries ────────────────────────── */
+function renderRankCountries() {
+  var map = {};
+  for (var i = 0; i < FILT.length; i++) {
+    var c = FILT[i].country, cl = FILT[i].club;
+    if (!map[c]) map[c] = {};
+    map[c][cl] = 1;
+  }
+  var arr = [];
+  for (var k in map) arr.push({k:k, v:Object.keys(map[k]).length});
+  arr.sort(function(a,b){return b.v-a.v;});
+  arr = arr.slice(0,10);
+  if (!arr.length) { document.getElementById('r-ctry').innerHTML = empty(); return; }
+  var mx = arr[0].v, html = '';
+  for (var j = 0; j < arr.length; j++) {
+    var x = arr[j], pct = (x.v/mx*100).toFixed(1), col = PAL[j%PAL.length];
+    html += rankRow(j+1, esc(x.k), x.v+' klub', pct, col, '');
+  }
+  document.getElementById('r-ctry').innerHTML = html;
+}
+
+function rankRow(n, name, val, pct, col, sub) {
+  return '<div class="rank-row">'+
+    '<span class="rank-n">'+n+'</span>'+
+    '<div style="flex:1">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between">'+
+        '<span class="rank-name">'+name+'</span>'+
+        '<span class="rank-val">'+val+'</span>'+
+      '</div>'+
+      '<div class="prog"><div class="prog-fill" style="width:'+pct+'%;background:'+col+'"></div></div>'+
+      (sub?'<span style="font-size:.67rem;color:var(--t3)">'+sub+'</span>':'')+'</div></div>';
+}
+
+/* ═══════════════════════════════════════════════
+   TIMELINE
+═══════════════════════════════════════════════ */
+function suggestClubs(q) {
+  var drop = document.getElementById('club-drop');
+  q = q.trim().toLowerCase();
+  if (!q) { drop.style.display = 'none'; return; }
+  var matches = [];
+  for (var i = 0; i < CLUBS.length; i++) {
+    if (CLUBS[i].toLowerCase().indexOf(q) >= 0 && SEL.indexOf(CLUBS[i]) < 0) {
+      matches.push(CLUBS[i]);
+      if (matches.length >= 10) break;
+    }
+  }
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  var html = '';
+  for (var j = 0; j < matches.length; j++) {
+    html += '<div style="padding:.5rem .85rem;font-size:.83rem;color:var(--t2);cursor:pointer;transition:background .15s" '+
+      'onmouseover="this.style.background=\'var(--card)\'" onmouseout="this.style.background=\'\'" '+
+      'onclick="addClub(\''+escA(matches[j])+'\')">'+esc(matches[j])+'</div>';
+  }
+  drop.innerHTML = html;
+  drop.style.display = 'block';
+}
+
+document.addEventListener('click', function(e){
+  if (!e.target.closest('#club-inp') && !e.target.closest('#club-drop'))
+    document.getElementById('club-drop').style.display = 'none';
+});
+
+function addClub(c) {
+  if (SEL.indexOf(c) >= 0) return;
+  if (SEL.length >= 8) { toast('⚠️ Maksimal 8 klub','err'); return; }
+  SEL.push(c);
+  document.getElementById('club-inp').value = '';
+  document.getElementById('club-drop').style.display = 'none';
+  renderPills();
+  renderTimeline();
+}
+
+function removeClub(c) {
+  SEL = SEL.filter(function(x){return x!==c;});
+  renderPills();
+  if (SEL.length) renderTimeline(); else timelineEmpty();
+}
+
+function clearClubs() {
+  SEL = [];
+  renderPills();
+  timelineEmpty();
+}
+
+function renderPills() {
+  var html = '';
+  for (var i = 0; i < SEL.length; i++) {
+    var col = PAL[i%PAL.length];
+    html += '<span class="pill" style="border-color:'+col+';background:'+col+'22;color:'+col+'">'+
+      esc(SEL[i])+
+      ' <span onclick="removeClub(\''+escA(SEL[i])+'\')" style="cursor:pointer;opacity:.7;margin-left:.2rem">×</span></span>';
+  }
+  document.getElementById('club-pills').innerHTML = html;
+}
+
+function renderTimeline() {
+  // Aggregate monthly max elo per club from RAW (not filtered)
+  var byClub = {};
+  for (var i = 0; i < SEL.length; i++) byClub[SEL[i]] = {};
+  for (var j = 0; j < RAW.length; j++) {
+    var r = RAW[j];
+    if (!byClub[r.club] || !r.date || r.date.length < 7) continue;
+    var ym = r.date.substring(0,7);
+    if (byClub[r.club][ym] === undefined || r.elo > byClub[r.club][ym])
+      byClub[r.club][ym] = r.elo;
+  }
+  var mSet = {};
+  for (var k = 0; k < SEL.length; k++) {
+    var ms = Object.keys(byClub[SEL[k]]);
+    for (var m = 0; m < ms.length; m++) mSet[ms[m]] = 1;
+  }
+  var labels = Object.keys(mSet).sort();
+  var datasets = SEL.map(function(c, i){
+    return {
+      label: c,
+      data: labels.map(function(l){ return byClub[c][l] !== undefined ? byClub[c][l] : null; }),
+      borderColor: PAL[i%PAL.length],
+      backgroundColor: PAL[i%PAL.length]+'18',
+      fill: false, tension: .4, pointRadius: 0, pointHoverRadius: 4,
+      borderWidth: 2, spanGaps: true
+    };
+  });
+  kill('c-time');
+  var o = opts();
+  o.plugins.legend = {display:true,labels:{color:'#7d8fa8',font:{family:'DM Sans',size:11},boxWidth:11,padding:14}};
+  var ctx = document.getElementById('c-time').getContext('2d');
+  CH['c-time'] = new Chart(ctx, {type:'line', data:{labels:labels,datasets:datasets}, options:o});
+}
+
+function timelineEmpty() {
+  kill('c-time');
+  var cv = document.getElementById('c-time');
+  var ctx = cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = '#3d4f66';
+  ctx.font = '13px DM Sans,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Cari dan tambahkan klub di atas untuk melihat timeline Elo', cv.width/2, cv.height/2);
+}
+
+/* ═══════════════════════════════════════════════
+   CHART HELPERS
+═══════════════════════════════════════════════ */
+function bar(id, labels, vals, label, color, horiz) {
+  kill(id);
+  var o = opts();
+  if (horiz) o.indexAxis = 'y';
+  var ctx = document.getElementById(id).getContext('2d');
+  CH[id] = new Chart(ctx, {
+    type:'bar',
+    data:{labels:labels,datasets:[{label:label,data:vals,
+      backgroundColor:color+'bb',borderColor:color,
+      borderWidth:1,borderRadius:5,borderSkipped:false}]},
+    options:o
+  });
+}
+
+function kill(id) {
+  if (CH[id]) { CH[id].destroy(); delete CH[id]; }
+}
+
+function opts() {
+  return {
+    responsive:true, maintainAspectRatio:false,
+    animation:{duration:450,easing:'easeOutQuart'},
+    plugins:{
+      legend:{display:false},
+      title:{display:false},
+      tooltip:{
+        backgroundColor:'#161c28',borderColor:'#1e2738',borderWidth:1,
+        titleColor:'#e8edf5',bodyColor:'#7d8fa8',
+        padding:9,cornerRadius:7,
+        titleFont:{family:'DM Sans',size:12},
+        bodyFont:{family:'DM Mono',size:11}
+      }
+    },
+    scales:{
+      x:{ticks:{color:'#7d8fa8',font:{family:'DM Mono',size:10},maxRotation:35},
+         grid:{color:'#1e2738'},border:{color:'#1e2738'}},
+      y:{ticks:{color:'#7d8fa8',font:{family:'DM Mono',size:10}},
+         grid:{color:'#1e2738'},border:{color:'#1e2738'}}
+    }
+  };
+}
+
+/* ═══════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════ */
+function grp(arr, key) {
+  var o = {};
+  for (var i = 0; i < arr.length; i++) {
+    var k = arr[i][key];
+    if (!o[k]) o[k] = [];
+    o[k].push(arr[i]);
+  }
+  return o;
+}
+function avgF(arr, key) {
+  if (!arr.length) return 0;
+  var s = 0;
+  for (var i = 0; i < arr.length; i++) s += arr[i][key];
+  return s / arr.length;
+}
+function lbl(s, n) { s=String(s||''); return s.length>n?s.slice(0,n)+'…':s; }
+function str(v)    { return String(v||'').trim(); }
+function empty()   { return '<p style="font-size:.83rem;color:var(--t3);text-align:center;padding:1.2rem 0">Tidak ada data</p>'; }
+function esc(s)    { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escA(s)   { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function set(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; }
+function fillSel(id, vals, ph) {
+  var s = document.getElementById(id);
+  var h = '<option value="">'+ph+'</option>';
+  for (var i=0;i<vals.length;i++) h+='<option value="'+esc(vals[i])+'">'+esc(vals[i])+'</option>';
+  s.innerHTML = h;
+}
+function anim(id, target) {
+  var el = document.getElementById(id); if(!el) return;
+  var start = parseInt(el.textContent.replace(/\D/g,''))||0;
+  var t0 = performance.now();
+  (function tick(now){
+    var t = Math.min((now-t0)/550,1), ease = 1-Math.pow(1-t,3);
+    el.textContent = Math.round(start+(target-start)*ease).toLocaleString();
+    if(t<1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ── Toast ────────────────────────────────── */
+var TT;
+function toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show '+(type||'ok');
+  clearTimeout(TT); TT = setTimeout(function(){el.classList.remove('show');},3500);
+}
+
+/* ── Responsive grid fix ──────────────────── */
+window.addEventListener('resize', function(){
+  if (document.getElementById('dash').style.display !== 'none') {
+    Object.values(CH).forEach(function(c){ c.resize(); });
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   FOOTBALL CLASSIFICATIONS
+   Uses Elo-based probability models:
+   - Match Outcome: Elo expected score → Win/Draw/Loss %
+   - Over/Under 2.5: Dixon-Coles-style xG from Elo diff
+   - Both Teams To Score: Poisson P(home>0) * P(away>0)
+═══════════════════════════════════════════════ */
+
+var CL_HOME = null, CL_AWAY = null;  // selected club names
+
+/* ── Autocomplete ── */
+function clSuggest(side, q) {
+  var dropId = 'cl-' + side + '-drop';
+  var drop = document.getElementById(dropId);
+  q = q.trim().toLowerCase();
+  if (!q || !CLUBS.length) { drop.style.display = 'none'; return; }
+  var matches = [];
+  for (var i = 0; i < CLUBS.length; i++) {
+    if (CLUBS[i].toLowerCase().indexOf(q) >= 0) {
+      matches.push(CLUBS[i]);
+      if (matches.length >= 10) break;
+    }
+  }
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  var html = '';
+  for (var j = 0; j < matches.length; j++) {
+    html += '<div style="padding:.5rem .85rem;font-size:.83rem;color:var(--t2);cursor:pointer;transition:background .15s" ' +
+      'onmouseover="this.style.background=\'var(--card)\'" onmouseout="this.style.background=\'\'" ' +
+      'onclick="clSelect(\'' + side + '\',\'' + escA(matches[j]) + '\')">' + esc(matches[j]) + '</div>';
+  }
+  drop.innerHTML = html;
+  drop.style.display = 'block';
+}
+
+function clSelect(side, club) {
+  if (side === 'home') {
+    CL_HOME = club;
+    document.getElementById('cl-home-inp').value = club;
+    document.getElementById('cl-home-drop').style.display = 'none';
+  } else {
+    CL_AWAY = club;
+    document.getElementById('cl-away-inp').value = club;
+    document.getElementById('cl-away-drop').style.display = 'none';
+  }
+  clUpdateSelected();
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#cl-home-inp') && !e.target.closest('#cl-home-drop'))
+    document.getElementById('cl-home-drop').style.display = 'none';
+  if (!e.target.closest('#cl-away-inp') && !e.target.closest('#cl-away-drop'))
+    document.getElementById('cl-away-drop').style.display = 'none';
+});
+
+function clUpdateSelected() {
+  var btn = document.getElementById('cl-btn');
+  var selDiv = document.getElementById('cl-selected');
+  if (CL_HOME && CL_AWAY) {
+    btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+    var eH = clGetLatestElo(CL_HOME), eA = clGetLatestElo(CL_AWAY);
+    document.getElementById('cl-home-pill').textContent = CL_HOME;
+    document.getElementById('cl-away-pill').textContent = CL_AWAY;
+    document.getElementById('cl-elo-diff').textContent =
+      'Elo Home: ' + (eH ? eH.toFixed(0) : '?') + '  |  Elo Away: ' + (eA ? eA.toFixed(0) : '?');
+    selDiv.style.display = 'block';
+  } else {
+    btn.style.opacity = '.4'; btn.style.pointerEvents = 'none';
+    selDiv.style.display = 'none';
+  }
+}
+
+function clGetLatestElo(clubName) {
+  var latest = null;
+  for (var i = 0; i < RAW.length; i++) {
+    if (RAW[i].club === clubName) {
+      if (!latest || RAW[i].date > latest.date) latest = RAW[i];
+    }
+  }
+  return latest ? latest.elo : null;
+}
+
+/* ── Core prediction engine ── */
+function runClassify() {
+  if (!CL_HOME || !CL_AWAY) return;
+  var eH = clGetLatestElo(CL_HOME), eA = clGetLatestElo(CL_AWAY);
+  if (!eH || !eA) { toast('⚠️ Elo tidak ditemukan untuk salah satu klub','err'); return; }
+
+  // ── 1. Match Outcome (Elo expected score method) ──────────────
+  // Standard Elo win probability: E = 1 / (1 + 10^(−diff/400))
+  // Home advantage bonus: +50 Elo points to home
+  var HA_BONUS = 50;
+  var diff = (eH + HA_BONUS) - eA;
+  var eHome = 1 / (1 + Math.pow(10, -diff / 400));
+
+  // Approximate draw probability using Bradley-Terry extended model
+  // draw_factor peaks at ~20% when diff ≈ 0
+  var drawFactor = 0.20 * Math.exp(-Math.abs(diff) / 350);
+  var pWin  = eHome   * (1 - drawFactor);
+  var pLoss = (1 - eHome) * (1 - drawFactor);
+  var pDraw = drawFactor;
+  // Normalize
+  var tot = pWin + pDraw + pLoss;
+  pWin /= tot; pDraw /= tot; pLoss /= tot;
+
+  var outcomes = [
+    { label: 'Home Win', p: pWin,  color: '#3b82f6' },
+    { label: 'Draw',     p: pDraw, color: '#f59e0b' },
+    { label: 'Away Win', p: pLoss, color: '#ef4444' }
+  ];
+  outcomes.sort(function(a,b){return b.p-a.p;});
+  var topOutcome = outcomes[0];
+
+  set('cl-outcome-label', topOutcome.label);
+  document.getElementById('cl-outcome-label').style.color = topOutcome.color;
+  set('cl-outcome-conf', (topOutcome.p * 100).toFixed(1) + '% kemungkinan');
+
+  var barsHtml = '';
+  for (var i = 0; i < outcomes.length; i++) {
+    var o = outcomes[i];
+    barsHtml += probBar(o.label, o.p, o.color);
+  }
+  document.getElementById('cl-outcome-bars').innerHTML = barsHtml;
+
+  // ── 2. Over/Under 2.5 (xG from Elo, Poisson) ─────────────────
+  // Estimate xG: base 1.35 goals/team, adjusted ±0.3 per 200 Elo diff
+  var BASE_XG  = 1.35;
+  var ELO_SCALE = 200;
+  var xgH = BASE_XG + (diff / ELO_SCALE) * 0.30;
+  var xgA = BASE_XG - (diff / ELO_SCALE) * 0.30;
+  xgH = Math.max(0.35, Math.min(xgH, 3.5));
+  xgA = Math.max(0.35, Math.min(xgA, 3.5));
+
+  // P(total goals > 2.5) using Poisson sum P(X≤2) where X~Poisson(xgH+xgA)
+  var lambda = xgH + xgA;
+  var pUnder = poissonCDF(2, lambda);
+  var pOver  = 1 - pUnder;
+
+  var ouLabel = pOver > 0.5 ? 'Over 2.5' : 'Under 2.5';
+  var ouColor = pOver > 0.5 ? '#22c55e' : '#a855f7';
+  set('cl-ou-label', ouLabel);
+  document.getElementById('cl-ou-label').style.color = ouColor;
+  set('cl-ou-conf', (Math.max(pOver, pUnder) * 100).toFixed(1) + '% kemungkinan');
+  document.getElementById('cl-ou-bars').innerHTML =
+    probBar('Over 2.5',  pOver,  '#22c55e') +
+    probBar('Under 2.5', pUnder, '#a855f7');
+  set('cl-ou-xg', 'xG estimasi — Home: ' + xgH.toFixed(2) + '  Away: ' + xgA.toFixed(2) + '  Total: ' + lambda.toFixed(2));
+
+  // ── 3. Both Teams To Score (Poisson) ─────────────────────────
+  // P(home scores ≥1) = 1 − P(home=0) = 1 − e^(−xgH)
+  // P(away scores ≥1) = 1 − e^(−xgA)
+  // P(BTTS) = P(h≥1) × P(a≥1)
+  var pHScore = 1 - Math.exp(-xgH);
+  var pAScore = 1 - Math.exp(-xgA);
+  var pBTTS   = pHScore * pAScore;
+  var pNoBTTS = 1 - pBTTS;
+
+  var bttsLabel = pBTTS > 0.5 ? 'Yes' : 'No';
+  var bttsColor = pBTTS > 0.5 ? '#22c55e' : '#ef4444';
+  set('cl-btts-label', bttsLabel);
+  document.getElementById('cl-btts-label').style.color = bttsColor;
+  set('cl-btts-conf', (Math.max(pBTTS, pNoBTTS) * 100).toFixed(1) + '% kemungkinan');
+  document.getElementById('cl-btts-bars').innerHTML =
+    probBar('BTTS Yes', pBTTS,   '#22c55e') +
+    probBar('BTTS No',  pNoBTTS, '#ef4444');
+  set('cl-btts-note',
+    'P(Home score) ' + (pHScore*100).toFixed(1) + '%  ·  P(Away score) ' + (pAScore*100).toFixed(1) + '%');
+
+  // ── Elo comparison bar ────────────────────────────────────────
+  var totalElo  = eH + eA;
+  var homePct   = (eH / totalElo * 100).toFixed(1);
+  document.getElementById('cl-bar-home-lbl').textContent  = CL_HOME;
+  document.getElementById('cl-bar-away-lbl').textContent  = CL_AWAY;
+  document.getElementById('cl-bar-home-fill').style.width = homePct + '%';
+  document.getElementById('cl-bar-home-elo').textContent  = 'Elo ' + eH.toFixed(0);
+  document.getElementById('cl-bar-away-elo').textContent  = 'Elo ' + eA.toFixed(0);
+
+  var diffAbs = Math.abs(eH - eA);
+  var dominance = diffAbs < 50 ? 'sangat seimbang' : diffAbs < 150 ? 'sedikit tidak merata' : diffAbs < 300 ? 'cukup timpang' : 'sangat timpang';
+  var stronger  = eH >= eA ? CL_HOME + ' (home)' : CL_AWAY + ' (away)';
+  set('cl-explanation',
+    'Selisih Elo: ' + diffAbs.toFixed(0) + ' poin → kekuatan ' + dominance + '. ' +
+    'Tim lebih kuat: ' + stronger + '. ' +
+    'Home advantage setara ~50 Elo poin tambahan. ' +
+    'Prediksi berbasis model probabilistik Elo; bukan jaminan hasil pertandingan sesungguhnya.'
+  );
+
+  document.getElementById('cl-results').style.display = 'block';
+  document.getElementById('cl-results').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* ── helpers ── */
+function probBar(label, p, color) {
+  var pct = (p * 100).toFixed(1);
+  return '<div style="margin-bottom:.4rem">' +
+    '<div style="display:flex;justify-content:space-between;font-size:.73rem;color:var(--t2);margin-bottom:.18rem">' +
+      '<span>' + label + '</span><span class="mono">' + pct + '%</span>' +
+    '</div>' +
+    '<div style="height:5px;background:var(--border);border-radius:99px;overflow:hidden">' +
+      '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function poissonPMF(k, lambda) {
+  // e^(-λ) * λ^k / k!
+  var logP = -lambda + k * Math.log(lambda);
+  var logK = 0;
+  for (var i = 2; i <= k; i++) logK += Math.log(i);
+  return Math.exp(logP - logK);
+}
+
+function poissonCDF(k, lambda) {
+  var sum = 0;
+  for (var i = 0; i <= k; i++) sum += poissonPMF(i, lambda);
+  return sum;
+}
+
+function clReset() {
+  CL_HOME = null; CL_AWAY = null;
+  document.getElementById('cl-home-inp').value = '';
+  document.getElementById('cl-away-inp').value = '';
+  document.getElementById('cl-selected').style.display = 'none';
+  document.getElementById('cl-results').style.display = 'none';
+  var btn = document.getElementById('cl-btn');
+  btn.style.opacity = '.4'; btn.style.pointerEvents = 'none';
+}
+</script>
+</body>
+</html>
