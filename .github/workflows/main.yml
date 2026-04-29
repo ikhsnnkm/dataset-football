@@ -1,0 +1,20 @@
+name: CI - Web Validation
+on:
+  push:
+    branches: [ main, "bugfix/**", "feature/**" ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files exist
+        run: |
+          test -f index.html && echo "✅ index.html" || exit 1
+          test -f script.js  && echo "✅ script.js"  || exit 1
+      - name: Check HTML structure
+        run: |
+          grep -q "Football Analytics" index.html || exit 1
+          grep -q "chart.js" index.html        || exit 1
+          grep -q "papaparse" index.html       || exit 1
